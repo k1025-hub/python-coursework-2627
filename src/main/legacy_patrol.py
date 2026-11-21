@@ -84,13 +84,13 @@ def summarize_events(events, max_id):
 
 
 def log(message, history=None):
-    if history is None:
-        history = []
     """向历史追加一条日志并返回整个历史列表。
     不显式传入 history 时，每次调用都从空历史开始。"""
+    if history is None:
+        history = []
+
     history.append(message)
     return history
-
 # ---------------------------------------------------------------------------
 # 旧版巡逻模拟
 # ---------------------------------------------------------------------------
