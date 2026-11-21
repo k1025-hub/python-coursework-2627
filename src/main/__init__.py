@@ -558,10 +558,38 @@ def report_to_json(stats):
 # ---------------------------------------------------------------------------
 # Bonus：BFS 全局最短路（题面 Bonus·BFS 语义与排行榜）
 # ---------------------------------------------------------------------------
-def bfs_path_length(start, target, obstacles):
-    """TODO(Bonus)：BFS 全局最短路步数；返回语义与边界职责见题面 Bonus 规范。"""
-    raise NotImplementedError("Bonus bfs_path_length")
 
+
+def bfs_path_length(start, target, obstacles):
+    if start == target:
+        return 0
+
+    queue = [(start, 0)]
+    visited = {start}
+    index = 0
+
+    while index < len(queue):
+        current, distance = queue[index]
+        index += 1
+
+        x, y = current
+
+        for next_pos in (
+            (x + 1, y),
+            (x - 1, y),
+            (x, y + 1),
+            (x, y - 1),
+        ):
+            if next_pos in obstacles or next_pos in visited:
+                continue
+
+            if next_pos == target:
+                return distance + 1
+
+            visited.add(next_pos)
+            queue.append((next_pos, distance + 1))
+
+    return -1
 
 # ---------------------------------------------------------------------------
 # 渲染（已提供，demo 专用，不进测试）
