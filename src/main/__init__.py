@@ -35,23 +35,127 @@ class Facing(Enum):
 # Q1 机器人自检（题面 Q1·自检状态计算与报告生成）
 # ---------------------------------------------------------------------------
 def hp_ratio(hp, max_hp):
-    """TODO(Q1)：血量百分比，返回 0-100 的 int；计算与边界规则见题面 Q1 规范。"""
-    raise NotImplementedError("Q1 hp_ratio：题面 Q1·血量百分比与精度保障")
+    if max_hp <= 0:
+        return 0
+
+    percentage = int(hp * 100 / max_hp)
+    return max(0, min(100, percentage))
 
 
 def status_report(name, robot_type, hp, max_hp, battery):
-    """TODO(Q1)：一行自检报告字符串；档位判定与逐字符格式见题面 Q1 规范。"""
-    raise NotImplementedError("Q1 status_report：题面 Q1·电量映射与报告格式")
+    hp_percent = hp_ratio(hp, max_hp)
+
+    if battery >= 60:
+        battery_status = "OK"
+    elif battery >= 20:
+        battery_status = "WARNING"
+    else:
+        battery_status = "LOW"
+
+    return (f"{name:<10}|{robot_type:^10}|HP {hp_percent:>3}%|"
+            f"BAT {battery:>3}%|{battery_status}")
 
 
 # ---------------------------------------------------------------------------
 # Q2 战斗日志分析（题面 Q2·多源日志解析与统计）
 # ---------------------------------------------------------------------------
 def analyze_damage_log(lines):
-    """TODO(Q2)：解析混合格式伤害日志，返回固定契约的统计 dict；
-    行格式、去重与统计口径见题面 Q2 规范。"""
-    raise NotImplementedError("Q2 analyze_damage_log：题面 Q2·多源日志解析与统计")
+    by_armor = {"front": 0, "left": 0, "right": 0}
+    seen_ids = set()
+    damages = []
 
+    sensor_map = {
+        "F": "front",
+        "L": "left",
+        "R": "right",
+    }
+
+    for line in lines:
+        try:
+            if not isinstance(line, str):
+                continue
+
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            if line.startswith("{"):
+                record = json.loads(line)
+
+                if not isinstance(record, dict):
+                    continue
+
+                armor = record.get("armor")
+                damage = record.get("damage")
+
+                if armor not in by_armor:
+                    continue
+                if (not isinstance(damage, int)
+                        or isinstance(damage, bool)
+                        or damage <= 0):
+                    continue
+
+                if "id" in record:
+                    record_id = json.dumps(record["id"], sort_keys=True)
+                    if record_id in seen_ids:
+                        continue
+                    seen_ids.add(record_id)
+
+                by_armor[armor] += damage
+                damages.append(damage)
+
+            else:
+                parts = line.split(",")
+                parsed = []
+                used_labels = set()
+                valid = bool(parts)
+
+                for part in parts:
+                    if part.count(":") != 1:
+                        valid = False
+                        break
+
+                    label, value = part.split(":")
+
+                    if label not in sensor_map or label in used_labels:
+                        valid = False
+                        break
+
+                    if (not value.isascii()
+                            or not value.isdigit()
+                            or int(value) <= 0):
+                        valid = False
+                        break                    
+
+                    used_labels.add(label)
+                    parsed.append((sensor_map[label], int(value)))
+
+                if not valid or not parsed:
+                    continue
+
+                for armor, damage in parsed:
+                    by_armor[armor] += damage
+                    damages.append(damage)
+                    
+        except Exception:
+            continue
+        
+
+    total = sum(damages)
+
+    if total == 0:
+        most_hit = None
+        average = 0.0
+    else:
+        most_hit = max(by_armor, key=by_armor.get)
+        average = round(total / len(damages), 2)
+
+    return {
+        "total": total,
+        "by_armor": by_armor,
+        "most_hit": most_hit,
+        "avg": average,
+    }
 
 # ---------------------------------------------------------------------------
 # Q3 SentryGrid（题面 Q3·载体物理规则）
@@ -139,30 +243,93 @@ class SentryGrid:
 
     @current_pos.setter
     def current_pos(self, value):
-        """TODO(Q3)：位置 setter；三重输入校验见题面 Q3 规范第 1 条。"""
-        raise NotImplementedError("Q3 current_pos.setter：题面 Q3·位置校验三步")
+        if not isinstance(value, (tuple, list)) or len(value) != 2:
+            raise TypeError("当前位置需要长度为 2 的 tuple/list")
+
+        self._pos = self._clamp_cell(value)
+
 
     def move_forward(self):
-        """TODO(Q3)：朝当前 facing 前进一格，返回执行后的位置；
-        碰撞、耗电与断电语义见题面 Q3 规范。"""
-        raise NotImplementedError("Q3 move_forward：题面 Q3·前进、碰撞与断电")
+        if self._fuel <= 0:
+            return self._pos
+
+        self._fuel -= 1
+        dx, dy = self._facing.delta
+        next_x = self._pos[0] + dx
+        next_y = self._pos[1] + dy
+
+        if self.is_blocked(next_x, next_y):
+            self._collision_count += 1
+            return self._pos
+
+        self._pos = (next_x, next_y)
+        return self._pos
+
 
     def turn_left(self):
-        """TODO(Q3)：原地左转 90°，返回新的 Facing（不耗电）。"""
-        raise NotImplementedError("Q3 turn_left")
+        left_turn = {
+            Facing.UP: Facing.LEFT,
+            Facing.LEFT: Facing.DOWN,
+            Facing.DOWN: Facing.RIGHT,
+            Facing.RIGHT: Facing.UP,
+        }
+        self._facing = left_turn[self._facing]
+        return self._facing
+
 
     def turn_right(self):
-        """TODO(Q3)：原地右转 90°，返回新的 Facing（不耗电）。"""
-        raise NotImplementedError("Q3 turn_right")
+        right_turn = {
+            Facing.UP: Facing.RIGHT,
+            Facing.RIGHT: Facing.DOWN,
+            Facing.DOWN: Facing.LEFT,
+            Facing.LEFT: Facing.UP,
+        }
+        self._facing = right_turn[self._facing]
+        return self._facing    
 
 
 # ---------------------------------------------------------------------------
 # Q4 贪心导航（题面 Q4·单步贪心导航策略）
 # ---------------------------------------------------------------------------
 def next_step_toward(pos, target, obstacles, current_facing=Facing.UP):
-    """TODO(Q4)：返回下一步应朝向的 Facing；
-    候选判定、优先级与回退规则见题面 Q4 规范。"""
-    raise NotImplementedError("Q4 next_step_toward：题面 Q4·贪心策略与回退")
+    x, y = pos
+    target_x, target_y = target
+
+    current_distance = abs(x - target_x) + abs(y - target_y)
+    candidates = []
+
+    for facing in (Facing.UP, Facing.DOWN, Facing.LEFT, Facing.RIGHT):
+        dx, dy = facing.delta
+        next_pos = (x + dx, y + dy)
+
+        if next_pos in obstacles:
+            continue
+
+        next_distance = (abs(next_pos[0] - target_x)
+                         + abs(next_pos[1] - target_y))
+
+        if next_distance < current_distance:
+            candidates.append(facing)
+
+    if not candidates:
+        return current_facing
+
+    x_gap = abs(target_x - x)
+    y_gap = abs(target_y - y)
+
+    if x_gap >= y_gap:
+        preferred = Facing.RIGHT if target_x > x else Facing.LEFT
+        fallback = Facing.UP if target_y > y else Facing.DOWN
+    else:
+        preferred = Facing.UP if target_y > y else Facing.DOWN
+        fallback = Facing.RIGHT if target_x > x else Facing.LEFT
+
+    if preferred in candidates:
+        return preferred
+    if fallback in candidates:
+        return fallback
+
+    return candidates[0]
 
 
 # ---------------------------------------------------------------------------
@@ -179,24 +346,214 @@ class SentryState(Enum):
 
 
 def decide(sensor, state, hp, heat):
-    """TODO(Q5)：纯函数决策，返回 (action: str, new_state: SentryState)；
-    sensor 字段契约、R1-R7 规则表与非法输入处理见题面 Q5 规范。"""
-    raise NotImplementedError("Q5 decide：题面 Q5·决策规则表 R1-R7")
+    required_fields = {
+        "enemy_frames",
+        "enemy_dist",
+        "robot_type",
+        "max_hp",
+    }
+
+    if not isinstance(sensor, dict) or not required_fields.issubset(sensor):
+        raise ValueError("sensor 缺少必要字段")
+
+    if not isinstance(state, SentryState):
+        raise ValueError("state 必须是 SentryState")
+
+    enemy_frames = sensor["enemy_frames"]
+
+    if isinstance(enemy_frames, (tuple, list)):
+        if not 1 <= len(enemy_frames) <= 6:
+            raise ValueError("enemy_frames 长度必须为 1 到 6")
+        enemy_frames = tuple(bool(frame) for frame in enemy_frames)
+    else:
+        # 字段存在但值不合法：防御式地视为当前未发现敌人
+        enemy_frames = (False,)
+
+    def to_int(value, default):
+        if isinstance(value, bool):
+            return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    max_hp = to_int(sensor["max_hp"], 0)
+    hp_value = to_int(hp, 0)
+    hp_pct = hp_ratio(hp_value, max_hp)
+
+    enemy_dist = sensor["enemy_dist"]
+    if (isinstance(enemy_dist, bool)
+            or not isinstance(enemy_dist, int)
+            or enemy_dist < 0):
+        enemy_dist = 999999
+
+    robot_type = sensor["robot_type"]
+    if robot_type != "HERO":
+        robot_type = "INFANTRY"
+
+    visible = enemy_frames[-1]
+
+    def engage_action():
+        if enemy_dist <= 3:
+            return "SHOOT", SentryState.ENGAGE
+        if robot_type == "HERO":
+            return "MOVE_RIGHT", SentryState.ENGAGE
+        return "MOVE_LEFT", SentryState.ENGAGE
+
+    # R1：保命优先
+    if hp_pct <= 30:
+        return "RETREAT", SentryState.RETREAT
+
+    # R2：撤退保持
+    if state is SentryState.RETREAT:
+        return "RETURN", SentryState.RETURN
+
+    # R3：返航只持续一帧
+    if state is SentryState.RETURN:
+        return "MOVE_BASE", SentryState.PATROL
+
+    # R4 / R5：交火状态
+    if state is SentryState.ENGAGE:
+        if visible:
+            return engage_action()
+
+        if len(enemy_frames) >= 2 and not enemy_frames[-2]:
+            return "SCAN", SentryState.SUSPECT
+        return "HOLD_FIRE", SentryState.ENGAGE
+
+    # R6：PATROL / SUSPECT 状态下确认敌情
+    if visible:
+        confirmed = (len(enemy_frames) >= 2
+                     and enemy_frames[-2]
+                     and enemy_frames[-1])
+
+        if confirmed:
+            return engage_action()
+        return "SCAN", SentryState.SUSPECT
+
+    # R7：默认行为
+    if state is SentryState.PATROL:
+        return "PATROL_MOVE", SentryState.PATROL
+
+    return "SCAN", SentryState.SUSPECT
 
 
 # ---------------------------------------------------------------------------
 # Q6 巡逻任务（题面 Q6·巡逻契约与验收阈值）
 # ---------------------------------------------------------------------------
 def run_patrol(grid, max_steps=500):
-    """TODO(Q6)：sense → decide → act 主循环；
-    循环结构、终止条件、脱困自由度与统计返回契约见题面 Q6 规范。"""
-    raise NotImplementedError("Q6 run_patrol：题面 Q6·主循环与统计契约")
+    left_of = {
+        Facing.UP: Facing.LEFT,
+        Facing.LEFT: Facing.DOWN,
+        Facing.DOWN: Facing.RIGHT,
+        Facing.RIGHT: Facing.UP,
+    }
+    right_of = {value: key for key, value in left_of.items()}
+
+    def manhattan(a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def has_greedy_candidate():
+        pos = grid.current_pos
+        distance = manhattan(pos, grid.enemy_pos)
+
+        for facing in (Facing.UP, Facing.DOWN, Facing.LEFT, Facing.RIGHT):
+            dx, dy = facing.delta
+            nxt = (pos[0] + dx, pos[1] + dy)
+
+            if (not grid.is_blocked(*nxt)
+                    and manhattan(nxt, grid.enemy_pos) < distance):
+                return True
+
+        return False
+
+    def face(direction):
+        order = {
+            Facing.UP: 0,
+            Facing.RIGHT: 1,
+            Facing.DOWN: 2,
+            Facing.LEFT: 3,
+        }
+        turns = (order[direction] - order[grid.facing]) % 4
+
+        if turns == 3:
+            grid.turn_left()
+        else:
+            for _ in range(turns):
+                grid.turn_right()
+
+    steps = 0
+    visited = {grid.current_pos}
+    wall_mode = False
+    hand = "L"
+    wall_steps = 0
+    entry_distance = 0
+    switch_limit = grid.width + grid.height
+
+    while (steps < max_steps
+           and grid.fuel > 0
+           and not grid.found_enemy):
+
+        pos = grid.current_pos
+
+        if not wall_mode and not has_greedy_candidate():
+            wall_mode = True
+            hand = "L"
+            wall_steps = 0
+            entry_distance = manhattan(pos, grid.enemy_pos)
+
+        if wall_mode:
+            side = (left_of[grid.facing]
+                    if hand == "L" else right_of[grid.facing])
+            outer = (right_of[grid.facing]
+                     if hand == "L" else left_of[grid.facing])
+
+            def cell(direction):
+                dx, dy = direction.delta
+                return pos[0] + dx, pos[1] + dy
+
+            if not grid.is_blocked(*cell(side)):
+                face(side)
+            elif grid.is_blocked(*cell(grid.facing)):
+                if not grid.is_blocked(*cell(outer)):
+                    face(outer)
+                else:
+                    grid.turn_right()
+                    grid.turn_right()
+        else:
+            direction = next_step_toward(
+                pos, grid.enemy_pos, grid.obstacles, grid.facing
+            )
+            face(direction)
+
+        grid.move_forward()
+        steps += 1
+        visited.add(grid.current_pos)
+
+        if wall_mode:
+            wall_steps += 1
+
+            if wall_steps > switch_limit and hand == "L":
+                hand = "R"
+                wall_steps = 0
+            elif wall_steps > 2 * switch_limit:
+                wall_mode = False
+            elif (has_greedy_candidate()
+                  and manhattan(grid.current_pos, grid.enemy_pos)
+                  < entry_distance + 1):
+                wall_mode = False
+
+    return {
+        "steps": steps,
+        "collisions": grid.collision_count,
+        "visited_count": len(visited),
+        "found_enemy": grid.found_enemy,
+        "success": grid.found_enemy,
+    }
 
 
 def report_to_json(stats):
-    """TODO(Q6)：把 stats 序列化为确定性的 JSON 字符串，见题面 Q6 规范。"""
-    raise NotImplementedError("Q6 report_to_json：题面 Q6·报告序列化")
-
+    return json.dumps(stats, sort_keys=True, separators=(",", ":"))
 
 # ---------------------------------------------------------------------------
 # Bonus：BFS 全局最短路（题面 Bonus·BFS 语义与排行榜）
