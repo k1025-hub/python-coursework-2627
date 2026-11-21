@@ -125,7 +125,7 @@ def analyze_damage_log(lines):
                             or not value.isdigit()
                             or int(value) <= 0):
                         valid = False
-                        break                    
+                        break
 
                     used_labels.add(label)
                     parsed.append((sensor_map[label], int(value)))
@@ -136,10 +136,9 @@ def analyze_damage_log(lines):
                 for armor, damage in parsed:
                     by_armor[armor] += damage
                     damages.append(damage)
-                    
+
         except Exception:
             continue
-        
 
     total = sum(damages)
 
@@ -160,6 +159,8 @@ def analyze_damage_log(lines):
 # ---------------------------------------------------------------------------
 # Q3 SentryGrid（题面 Q3·载体物理规则）
 # ---------------------------------------------------------------------------
+
+
 class SentryGrid:
     """哨兵仿真载体（构造与只读属性已提供；四个 TODO 方法由你实现）。"""
 
@@ -248,7 +249,6 @@ class SentryGrid:
 
         self._pos = self._clamp_cell(value)
 
-
     def move_forward(self):
         if self._fuel <= 0:
             return self._pos
@@ -265,7 +265,6 @@ class SentryGrid:
         self._pos = (next_x, next_y)
         return self._pos
 
-
     def turn_left(self):
         left_turn = {
             Facing.UP: Facing.LEFT,
@@ -276,7 +275,6 @@ class SentryGrid:
         self._facing = left_turn[self._facing]
         return self._facing
 
-
     def turn_right(self):
         right_turn = {
             Facing.UP: Facing.RIGHT,
@@ -285,7 +283,7 @@ class SentryGrid:
             Facing.LEFT: Facing.UP,
         }
         self._facing = right_turn[self._facing]
-        return self._facing    
+        return self._facing
 
 
 # ---------------------------------------------------------------------------
@@ -594,6 +592,8 @@ def bfs_path_length(start, target, obstacles):
 # ---------------------------------------------------------------------------
 # 渲染（已提供，demo 专用，不进测试）
 # ---------------------------------------------------------------------------
+
+
 def render_frame(grid, trail=()):
     """ASCII 渲染一帧战场；trail 为走过的格子集合。返回 list[str]。"""
     trail = set(trail)

@@ -83,10 +83,9 @@ def summarize_events(events, max_id):
     return {"events": used, "steps": steps}
 
 
-
 def log(message, history=None):
     if history is None:
-        history = []   
+        history = []
     """向历史追加一条日志并返回整个历史列表。
     不显式传入 history 时，每次调用都从空历史开始。"""
     history.append(message)
@@ -95,6 +94,8 @@ def log(message, history=None):
 # ---------------------------------------------------------------------------
 # 旧版巡逻模拟
 # ---------------------------------------------------------------------------
+
+
 def run_legacy_sim(rounds, stamina_start=100):
     """旧版巡逻模拟。
 
